@@ -58,6 +58,7 @@ def main(example = 1):
       robot with 1 joint and 2 links.  
     """
     if example == 1:    
+        # Example single joint robot in 2d
         # Define system parameters
         delta_t = 0.1  # Time step
         I = 1.0  # Moment of inertia
@@ -112,6 +113,21 @@ def main(example = 1):
         plt.legend()
         plt.show()
     
+    if example == 2: 
+        # Example two jointed 2d robot 
+        # Defining link length for two joint robot 
+        l1,l2 = 0.5,0.3
+        m1,m2 = 1.2,0.9
+
+        # Define system parameters
+        delta_t = 0.1 
+        I1 = (1/3)*m1*l1^2 
+        I2 = (1/3)*m2*l2^2 
+
+        # Initial state 
+        initial_state = np.array([np.pi,0,np.pi,0])
+
+
 
 if __name__ == '__main__':
     # This so we can test it in file and import the file without running the main function
