@@ -6,6 +6,8 @@ Author: Willem Momma <w.j.momma@student.tudelft.nl, willemmomma@gmail.com>
 
 import numpy as np 
 import matplotlib.pyplot as plt
+import pandas as pd
+import scipy.linalg 
 class KalmanFilter:
     """
     Class to setup a Kalman filter for sensor fusion.
@@ -29,6 +31,12 @@ class KalmanFilter:
         self.x = np.dot(self.F, self.x) + np.dot(self.G, u) 
         self.P = np.dot(np.dot(self.F,self.P), self.F.T) + self.Q
         return self.x
+    
+    def set_measurement_noise_covariance(self, R):
+        """
+        Set the measurement noise covariance
+        """
+        self.R = R
 
     def update(self, z):
         """
@@ -54,8 +62,9 @@ class KalmanFilter:
 
 def main(example = 1): 
 
-    """Running the kalman filter on an example of 2 dimensional torque controlled robot
-      robot with 1 joint and 2 links.  
+    """
+    Running the kalman filter on multiple examples
+    Input: select example to run: 
     """
     if example == 1:    
         # Example single joint robot in 2d
@@ -96,7 +105,6 @@ def main(example = 1):
             # Kalman Filter prediction and update
             kf.predict(np.array([[torque]]))
             kf.update(np.array([[measured_position], [measured_velocity]]))
-
             # Store values for plotting
             actual_positions.append(actual_position)
             measured_positions.append(measured_position)
@@ -113,22 +121,83 @@ def main(example = 1):
         plt.legend()
         plt.show()
     
-    if example == 2: 
-        # Example two jointed 2d robot 
-        # Defining link length for two joint robot 
-        l1,l2 = 0.5,0.3
-        m1,m2 = 1.2,0.9
+    if example == 3:
+        # Load data
+        kuka_tool_data = pd.read_csv('/home/willemmomma/thesis/catkin_ws/src/iiwa-ros-imitation-learning/cor_tud_controllers/python/data/rosbags/data/tool_positions.csv')
+        optitrack_data = pd.read_csv('/home/willemmomma/thesis/catkin_ws/src/iiwa-ros-imitation-learning/cor_tud_controllers/python/data/rosbags/data/optitrack_positions.csv')
 
-        # Define system parameters
-        delta_t = 0.1 
-        I1 = (1/3)*m1*l1^2 
-        I2 = (1/3)*m2*l2^2 
+        # variances calculated from the kuka_tool_data and optitrack_data
+        variance_kuka_x = kuka_tool_data['X'].var()
+        variance_kuka_y = kuka_tool_data['Y'].var()
+        variance_kuka_z = kuka_tool_data['Z'].var()
 
-        # Initial state 
-        initial_state = np.array([np.pi,0,np.pi,0])
+        variance_optitrack_x = optitrack_data['X'].var()
+        variance_optitrack_y = optitrack_data['Y'].var()
+        variance_optitrack_z = optitrack_data['Z'].var()       
+
+        # Kalman Filter setup
+        F = np.eye(3)
+        H = np.eye(3)
+        Q = np.diag([0.000001, 0.000001, 0.000001]) # Example values
+        P = np.eye(3) * 1000
+        x = np.zeros((3, 1))
+        G = np.zeros_like(F) 
+        R1 = np.diag([variance_kuka_x, variance_kuka_y, variance_kuka_z])*10000 
+        R2 = np.diag([variance_optitrack_x, variance_optitrack_y, variance_optitrack_z]) 
+        kf = KalmanFilter(F, np.zeros_like(F), Q, H, R2, P) 
+
+        fused_estimates = []
+
+        # Debugging: Print variances
+        print("KUKA variances:", variance_kuka_x, variance_kuka_y, variance_kuka_z)
+        print("Optitrack variances:", variance_optitrack_x, variance_optitrack_y, variance_optitrack_z)
+
+        # Debugging: Check some sample data
+        print("Sample KUKA data:", kuka_tool_data.iloc[0])
+        print("Sample Optitrack data:", optitrack_data.iloc[0])
 
 
+        # Process each data point
+        for i in range(len(kuka_tool_data)):
+            z1 = kuka_tool_data.iloc[i].values.reshape(-1, 1)
+            z2 = optitrack_data.iloc[i].values.reshape(-1, 1)
 
-if __name__ == '__main__':
-    # This so we can test it in file and import the file without running the main function
-    main()
+            # Calculate the combined noise covariance matrix
+            R_combined_inv = np.linalg.inv(R1) + np.linalg.inv(R2)
+            R_combined = np.linalg.inv(R_combined_inv)
+
+            # Calculate the combined measurement
+            z_combined = R_combined @ (np.linalg.inv(R1) @ z1 + np.linalg.inv(R2) @ z2)
+
+            # Update the Kalman Filter's measurement noise covariance
+            kf.set_measurement_noise_covariance(R_combined)
+
+            # Kalman Filter update
+            kf.predict(u=np.zeros((3, 1))) # No control input
+            kf.update(z_combined)
+            # Store the updated state
+            fused_estimates.append(kf.x.flatten())
+
+        # Convert to DataFrame for easier processing
+        fused_estimates_df = pd.DataFrame(fused_estimates, columns=['X', 'Y', 'Z'])
+
+        # Plotting
+        plt.figure(figsize=(12, 8))
+        plt.plot(kuka_tool_data['X'], label='KUKA X', alpha=0.7)
+        plt.plot(optitrack_data['X'], label='Optitrack X', alpha=0.7)
+        plt.plot(fused_estimates_df['X'], label='Fused X', alpha=0.7)
+        plt.xlabel('Time')
+        plt.ylabel('Position')
+        plt.title('Sensor Fusion - Position X Comparison')
+        plt.legend()
+        plt.show()
+
+        # Print mean and variance of the fused data
+        mean_fused = fused_estimates_df.mean()
+        variance_fused = fused_estimates_df.var()
+
+        print("Mean of Fused Data:", mean_fused)
+        print("Variance of Fused Data:", variance_fused)
+
+if __name__ == "__main__":
+    main(3)
