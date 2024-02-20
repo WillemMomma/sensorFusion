@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.linalg 
+from mpl_toolkits.mplot3d import Axes3D
+
 class KalmanFilter:
     """
     Class to setup a Kalman filter for sensor fusion.
@@ -123,8 +125,8 @@ def main(example = 1):
     
     if example == 3:
         # Load data
-        kuka_tool_data = pd.read_csv('/home/willemmomma/thesis/catkin_ws/src/iiwa-ros-imitation-learning/cor_tud_controllers/python/data/rosbags/data/tool_positions.csv')
-        optitrack_data = pd.read_csv('/home/willemmomma/thesis/catkin_ws/src/iiwa-ros-imitation-learning/cor_tud_controllers/python/data/rosbags/data/optitrack_positions.csv')
+        kuka_tool_data = pd.read_csv('/home/willemmomma/thesis/sensor_fusion/data/rosbags/data/tool_positions.csv')
+        optitrack_data = pd.read_csv('/home/willemmomma/thesis/sensor_fusion/data/rosbags/data/optitrack_positions.csv')
 
         # variances calculated from the kuka_tool_data and optitrack_data
         variance_kuka_x = kuka_tool_data['X'].var()
@@ -142,20 +144,11 @@ def main(example = 1):
         P = np.eye(3) * 1000
         x = np.zeros((3, 1))
         G = np.zeros_like(F) 
-        R1 = np.diag([variance_kuka_x, variance_kuka_y, variance_kuka_z])*10000 
+        R1 = np.diag([variance_kuka_x, variance_kuka_y, variance_kuka_z])*10 
         R2 = np.diag([variance_optitrack_x, variance_optitrack_y, variance_optitrack_z]) 
         kf = KalmanFilter(F, np.zeros_like(F), Q, H, R2, P) 
 
         fused_estimates = []
-
-        # Debugging: Print variances
-        print("KUKA variances:", variance_kuka_x, variance_kuka_y, variance_kuka_z)
-        print("Optitrack variances:", variance_optitrack_x, variance_optitrack_y, variance_optitrack_z)
-
-        # Debugging: Check some sample data
-        print("Sample KUKA data:", kuka_tool_data.iloc[0])
-        print("Sample Optitrack data:", optitrack_data.iloc[0])
-
 
         # Process each data point
         for i in range(len(kuka_tool_data)):
@@ -181,23 +174,63 @@ def main(example = 1):
         # Convert to DataFrame for easier processing
         fused_estimates_df = pd.DataFrame(fused_estimates, columns=['X', 'Y', 'Z'])
 
-        # Plotting
-        plt.figure(figsize=(12, 8))
-        plt.plot(kuka_tool_data['X'], label='KUKA X', alpha=0.7)
-        plt.plot(optitrack_data['X'], label='Optitrack X', alpha=0.7)
-        plt.plot(fused_estimates_df['X'], label='Fused X', alpha=0.7)
-        plt.xlabel('Time')
-        plt.ylabel('Position')
-        plt.title('Sensor Fusion - Position X Comparison')
-        plt.legend()
-        plt.show()
+       # Plotting
+        fig, axs = plt.subplots(3, figsize=(12, 18))
 
+        axs[0].plot(kuka_tool_data['X'], label='KUKA X', alpha=0.7)
+        axs[0].plot(optitrack_data['X'], label='Optitrack X', alpha=0.7)
+        axs[0].plot(fused_estimates_df['X'], label='Fused X', alpha=0.7)
+        axs[0].set_xlabel('Time')
+        axs[0].set_ylabel('Position')
+        axs[0].set_title('Sensor Fusion - Position X Comparison')
+        axs[0].legend()
+
+        axs[1].plot(kuka_tool_data['Y'], label='KUKA Y', alpha=0.7)
+        axs[1].plot(optitrack_data['Y'], label='Optitrack Y', alpha=0.7)
+        axs[1].plot(fused_estimates_df['Y'], label='Fused Y', alpha=0.7)
+        axs[1].set_xlabel('Time')
+        axs[1].set_ylabel('Position')
+        axs[1].set_title('Sensor Fusion - Position Y Comparison')
+        axs[1].legend()
+
+        axs[2].plot(kuka_tool_data['Z'], label='KUKA Z', alpha=0.7)
+        axs[2].plot(optitrack_data['Z'], label='Optitrack Z', alpha=0.7)
+        axs[2].plot(fused_estimates_df['Z'], label='Fused Z', alpha=0.7)
+        axs[2].set_xlabel('Time')
+        axs[2].set_ylabel('Position')
+        axs[2].set_title('Sensor Fusion - Position Z Comparison')
+        axs[2].legend()
+
+        plt.tight_layout()
+        plt.show()
         # Print mean and variance of the fused data
         mean_fused = fused_estimates_df.mean()
         variance_fused = fused_estimates_df.var()
 
-        print("Mean of Fused Data:", mean_fused)
-        print("Variance of Fused Data:", variance_fused)
+        print("Mean of Fused Data:")
+        print(mean_fused)
+        print("Variance of Fused Data:")
+        print(variance_fused)
+
+        print("KUKA variances:", variance_kuka_x, variance_kuka_y, variance_kuka_z)
+        print("Optitrack variances:", variance_optitrack_x, variance_optitrack_y, variance_optitrack_z)
+        # Plotting
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        ax.plot(kuka_tool_data['X'], kuka_tool_data['Y'], kuka_tool_data['Z'], label='KUKA', alpha=0.7)
+        ax.plot(optitrack_data['X'], optitrack_data['Y'], optitrack_data['Z'], label='Optitrack', alpha=0.7)
+        ax.plot(fused_estimates_df['X'], fused_estimates_df['Y'], fused_estimates_df['Z'], label='Fused', alpha=0.7)
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('Sensor Fusion - 3D Position Comparison')
+        ax.legend()
+
+        plt.show()
+
 
 if __name__ == "__main__":
     main(3)
+
